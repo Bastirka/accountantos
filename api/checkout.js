@@ -11,8 +11,8 @@ export default async function handler(req,res){
   if(['active','trialing','past_due','unpaid','incomplete'].includes(existing?.status))return res.status(409).json({error:'Subscription already active. Use Billing Portal to manage it.'});
   const s=stripe();
   let customerId=existing?.stripe_customer_id;
-  if(!customerId){const customer=await s.customers.create({email:user.email,metadata:{user_id:user.id}});customerId=customer.id;await persist(user.id,{stripe_customer_id:customerId})}
-  const session=await s.checkout.sessions.create({mode:'subscription',customer:customerId,line_items:[{price:process.env[plans[plan]],quantity:1}],client_reference_id:user.id,metadata:{user_id:user.id},subscription_data:{metadata:{user_id:user.id}},success_url:origin()+'/?checkout=success',cancel_url:origin()+'/?checkout=cancel'});
+  if(!customerId){const customer=await s.customers.create({email:user.email,metadata:{user_id:user.id}},{idempotencyKey:'accountantos-customer-'+user.id});customerId=customer.id;await persist(user.id,{stripe_customer_id:customerId})}
+  const session=await s.checkout.sessions.create({mode:'subscription',customer:customerId,line_items:[{price:process.env[plans[plan]],quantity:1}],client_reference_id:user.id,metadata:{user_id:user.id},subscription_data:{metadata:{user_id:user.id}},success_url:origin()+'/?checkout=success',cancel_url:origin()+'/?checkout=cancel'}, {idempotencyKey:'accountantos-checkout-'+user.id+'-'+plan+'-'+Math.floor(Date.now()/600000)});
   res.status(200).json({url:session.url});
  }catch(e){handleError(res,e)}
 }
