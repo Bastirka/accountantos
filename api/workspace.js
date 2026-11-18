@@ -29,9 +29,22 @@ export default async function handler(req,res){
   const next=validate(req.body?.payload);
   if(next.companies.length>companyLimit)return res.status(403).json({error:'Your plan allows up to '+companyLimit+' companies'});
   if(!tier && (next.transactions.length>30||next.invoices.length>30))return res.status(403).json({error:'Evaluation limit: up to 30 transactions and invoices'});
-  // Writes are performed only with the server-side secret key; never trust client-supplied ownership.
-  const {error}=await db.from('workspaces').upsert({user_id:u.id,payload:next,updated_at:new Date().toISOString()},{onConflict:'user_id'});
-  if(error)throw error;
-  res.status(200).json({saved:true,companyLimit});
+  // Compare-and-swap prevents silent overwrites when two tabs edit the same workspace.
+  const previousRevision=req.body?.updatedAt??null;
+  const serverRevision=workspaceResult.data?.updated_at??null;
+  if(previousRevision!==serverRevision)return res.status(409).json({error:'Data changed in another tab. Reload before saving.',code:'STALE_WORKSPACE'});
+  const changedAt=new Date().toISOString();
+  let result;
+  if(serverRevision){
+    result=await db.from('workspaces').update({payload:next,updated_at:changedAt})
+      .eq('user_id',u.id).eq('updated_at',serverRevision).select('updated_at').maybeSingle();
+  }else{
+    result=await db.from('workspaces').insert({user_id:u.id,payload:next,updated_at:changedAt})
+      .select('updated_at').maybeSingle();
+  }
+  if(result.error?.code==='23505')return res.status(409).json({error:'Workspace changed. Reload before saving.',code:'STALE_WORKSPACE'});
+  if(result.error)throw result.error;
+  if(!result.data)return res.status(409).json({error:'Workspace changed. Reload before saving.',code:'STALE_WORKSPACE'});
+  res.status(200).json({saved:true,updatedAt:result.data.updated_at,companyLimit});
  }catch(e){handleError(res,e)}
 }
