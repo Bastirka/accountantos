@@ -15,7 +15,9 @@ async function saveSubscription(subscription){
  await persist(userId,{stripe_customer_id:customerId,stripe_subscription_id:subscription.id,stripe_price_id:price,plan:tierFromPrice(price),status:subscription.status,current_period_end:end?new Date(end*1000).toISOString():null});
 }
 async function syncInvoice(invoice){
- const subscriptionId=typeof invoice.subscription==='string'?invoice.subscription:invoice.subscription?.id;
+ // In newer Stripe API versions subscription linkage may be in invoice.parent.
+ const sub=invoice.parent?.subscription_details?.subscription||invoice.subscription;
+ const subscriptionId=typeof sub==='string'?sub:sub?.id;
  if(subscriptionId)await saveSubscription(await stripe().subscriptions.retrieve(subscriptionId));
 }
 export default async function handler(req,res){
