@@ -35,7 +35,32 @@ function match(t){const candidates=db.invoices.filter(i=>i.company===db.current&
 function render(){const list=db.companies||[];$('company').innerHTML=list.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');$('company').value=db.current;let ts=db.transactions.filter(t=>t.company===db.current),is=db.invoices.filter(i=>i.company===db.current);$('countTr').textContent=ts.length;$('countInv').textContent=is.length;$('countMatch').textContent=ts.filter(match).length;$('trRows').innerHTML=ts.map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+esc(t.description)+'</td><td>'+fmt(t.amount)+'</td><td>'+esc(t.reference)+'</td><td>'+(match(t)?'<span class="pill">Iespējama sakritība</span>':'Jāpārbauda')+'</td></tr>').join('')||'<tr><td colspan="5">Nav darījumu</td></tr>';$('invRows').innerHTML=is.map(i=>'<tr><td>'+esc(i.number)+'</td><td>'+esc(i.partner)+'</td><td>'+fmt(i.total)+'</td><td>'+esc(i.date)+'</td></tr>').join('')||'<tr><td colspan="4">Nav rēķinu</td></tr>'}
 let workspaceRevision=null;let isSaving=false;
 async function save(){if(!user)throw Error('Not signed in');if(isSaving)throw Error('Saglabāšana jau notiek. Mēģini vēlreiz.');isSaving=true;try{const result=await billingRequest('workspace',{method:'PUT',body:JSON.stringify({payload:db,updatedAt:workspaceRevision})});workspaceRevision=result.updatedAt}catch(e){if(e.message.includes('Data changed')||e.message.includes('Workspace changed'))msg('Dati ir mainīti citā cilnē. Pirms turpināt, pārlādē lapu.',true);throw e}finally{isSaving=false}}
-async function start(u){user=u;$('workspaceNav').classList.toggle('hidden',!u);document.querySelector('header').classList.toggle('signed-out',!u);document.querySelector('main').classList.toggle('signed-out',!u);$('auth').classList.toggle('hidden',!!u);$('app').classList.toggle('hidden',!u);$('logout').classList.toggle('hidden',!u);$('account').textContent=u?.email||'Secure bookkeeping workspace';if(!u)return;try{const data=await billingRequest('workspace');db=data.payload||empty();workspaceRevision=data.updatedAt||null;window.companyLimit=data.companyLimit;$('addCompany').title='Uzņēmumu limits: '+data.companyLimit;msg('Uzņēmumu limits: '+data.companyLimit+' ('+data.tier+')')}catch(e){db=empty();window.companyLimit=0;msg('Datu ielādes kļūda: '+e.message,true)}render();await loadBilling()}
+let sessionGeneration=0;
+async function start(u){
+ const generation=++sessionGeneration;
+ user=u;db=empty();workspaceRevision=null;window.companyLimit=0;render();
+ $('workspaceNav').classList.toggle('hidden',!u);
+ document.querySelector('header').classList.toggle('signed-out',!u);
+ document.querySelector('main').classList.toggle('signed-out',!u);
+ $('auth').classList.toggle('hidden',!!u);$('app').classList.toggle('hidden',!u);
+ $('logout').classList.toggle('hidden',!u);
+ $('account').textContent=u?.email||'Secure bookkeeping workspace';
+ if(!u){msg('');return}
+ try{
+  const data=await billingRequest('workspace');
+  if(generation!==sessionGeneration)return;
+  db=data.payload||empty();workspaceRevision=data.updatedAt||null;
+  window.companyLimit=data.companyLimit;
+  $('addCompany').title='Uzņēmumu limits: '+data.companyLimit;
+  msg('Uzņēmumu limits: '+data.companyLimit+' ('+data.tier+')')
+ }catch(e){
+  if(generation!==sessionGeneration)return;
+  db=empty();workspaceRevision=null;window.companyLimit=0;
+  msg('Datu ielādes kļūda: '+e.message,true)
+ }
+ if(generation!==sessionGeneration)return;
+ render();await loadBilling()
+}
 $('authform').onsubmit=async e=>{e.preventDefault();$('authmsg').textContent='Pārbauda...';const {data,error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});$('authmsg').textContent=error?.message||'Pieslēgšanās veiksmīga';if(data?.user)await start(data.user)};
 $('signup').onclick=async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||!password)return authNotice('Ievadi e-pastu un paroli.',true);authNotice('Reģistrē kontu...');const {data,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:authReturnUrl}});if(error)return authNotice(error.message,true);authNotice(data.session?'Konts izveidots.':'Pārbaudi e-pastu. Atver jaunāko AccountantOS apstiprinājuma saiti.');$('resendConfirm').classList.remove('hidden')};
 $('resendConfirm').onclick=async()=>{const email=$('email').value.trim();if(!email)return authNotice('Ievadi e-pastu.',true);$('resendConfirm').disabled=true;const {error}=await sb.auth.resend({type:'signup',email,options:{emailRedirectTo:authReturnUrl}});$('resendConfirm').disabled=false;authNotice(error?.message||'Ja kontam nepieciešams apstiprinājums, nosūtīta jauna saite.',!!error)};
