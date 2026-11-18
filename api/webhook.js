@@ -31,7 +31,8 @@ export default async function handler(req,res){
    case 'customer.subscription.created':
    case 'customer.subscription.updated':
    case 'customer.subscription.deleted':
-    await saveSubscription(event.data.object);break;
+    // Resolve the current Stripe state to avoid an older retried webhook reverting entitlements.
+    await saveSubscription(await stripe().subscriptions.retrieve(event.data.object.id));break;
    case 'checkout.session.completed':
    case 'checkout.session.async_payment_succeeded':{
     const session=event.data.object;
