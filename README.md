@@ -35,3 +35,13 @@ Configure Stripe Dashboard > Developers > Webhooks: URL `https://accountantos-ch
 After setting variables, **redeploy** production to include the new environment values. Test Stripe checkout with Stripe test payment methods and inspect webhook delivery plus billing_accounts.
 
 **Limitations:** Plan-based usage limits and paid access are NOT enforced yet; prices shown in UI are illustrative until test prices are configured. The workspaces table holds user documents; review GDPR, storage design, backup, security, and billing behavior before accepting real customers. Do not paste `sk_test_`, `sk_live_`, `sb_secret_` or `whsec_` values into chat.
+
+
+## Commercialization hardening (Nov 18, 2026)
+- Authenticated `/api/workspace` GET/PUT validates workspace and checks Stripe subscription tier server-side (evaluation: 1 company, paid: 3/15/50 companies; evaluation limited to 30 invoices and transactions).
+- Frontend data reads and writes now go through this API. Do not claim this is secure until the SQL privilege migration below has been executed.
+- **Mandatory once**: run `sql/lockdown_workspace.sql` via Supabase SQL Editor to revoke direct browser INSERT/UPDATE/DELETE to `workspaces`. Otherwise paid access can be bypassed with a direct Supabase API call.
+- Webhook handler updated to retry failed events (HTTP 500), handle invoice paid/failed events, and validate customer ownership; add corresponding events to Stripe endpoint in sandbox and live mode.
+- **Not live**: current Stripe account connection is sandbox (`livemode: false`). Production Stripe keys, products, webhooks, portal configuration, applicable VAT settings, and end-to-end payment tests are still missing.
+- **Not yet appropriate for storing real client financial records**: single JSONB workspace, no automatic backups/restore verification, no conflict protection for concurrent edits, incomplete file-format support, lack of formal tenant isolation test and audit trail.
+- Before taking payments: confirm registered seller details, Stripe Live activation, verified payouts, privacy/DPA/terms, backup/restore, security review, cancellation/refund handling, tax registrations, and tests for failed/renewed/disputed payments.
