@@ -6,7 +6,7 @@
 <body>
 <header><div class="brand">◈ Accountant<span>OS</span></div><div id="account" class="muted">Secure bookkeeping workspace</div><button id="logout" class="secondary hidden">Iziet</button></header>
 <main>
-<section id="auth" class="card auth"><h1>Pieslēgties AccountantOS</h1><p class="muted">Izmanto e-pastu un paroli. Jauns konts var prasīt e-pasta apstiprinājumu.</p><form id="authform"><div class="form"><input id="email" type="email" placeholder="E-pasts" required><input id="password" type="password" placeholder="Parole" minlength="8" required></div><div class="form"><button type="submit">Pieslēgties</button><button type="button" id="signup" class="secondary">Reģistrēties</button></div></form><p id="authmsg" class="muted"></p></section>
+<section id="auth" class="card auth"><h1>Pieslēgties AccountantOS</h1><p class="muted">Izmanto e-pastu un paroli. Jauns konts var prasīt e-pasta apstiprinājumu.</p><form id="authform"><div class="form"><input id="email" type="email" placeholder="E-pasts" required><input id="password" type="password" placeholder="Parole" minlength="8" required></div><div class="form"><button type="submit">Pieslēgties</button><button type="button" id="signup" class="secondary">Reģistrēties</button></div></form><p id="authmsg" class="muted"></p><button type="button" id="resendConfirm" class="secondary hidden">Nosūtīt apstiprinājuma e-pastu vēlreiz</button></section>
 <section id="app" class="hidden">
 <h1>Darba panelis</h1><p class="muted">Bankas darījumu un rēķinu saskaņošanas prototips. Visi rezultāti jāpārbauda grāmatvedim.</p>
 <div class="grid"><div class="card"><small>Bankas darījumi</small><div id="countTr" class="value">0</div></div><div class="card"><small>Rēķini</small><div id="countInv" class="value">0</div></div><div class="card"><small>Saskaņoti pēc numura un summas</small><div id="countMatch" class="value ok">0</div></div></div>
@@ -19,6 +19,8 @@
 import {createClient} from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 const url='https://hoxwynoxgpayfvbszeeo.supabase.co', key='sb_publishable_c3fDTC-r_g3kFV1pISX8cQ_neNq5Y2s';
 const sb=createClient(url,key);const $=id=>document.getElementById(id);
+const authReturnUrl='https://accountantos-chi.vercel.app/';
+function authNotice(text,bad=false){$('authmsg').textContent=text;$('authmsg').className=bad?'error':'muted'}
 const empty=()=>({companies:[],current:'',transactions:[],invoices:[]});let user=null,db=empty();
 const fmt=n=>Number(n||0).toLocaleString('lv-LV',{style:'currency',currency:'EUR'});
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -28,7 +30,8 @@ function render(){const list=db.companies||[];$('company').innerHTML=list.map(c=
 async function save(){if(!user)return;const {error}=await sb.from('workspaces').upsert({user_id:user.id,payload:db,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error)throw error}
 async function start(u){user=u;$('auth').classList.toggle('hidden',!!u);$('app').classList.toggle('hidden',!u);$('logout').classList.toggle('hidden',!u);$('account').textContent=u?.email||'Secure bookkeeping workspace';if(!u)return;const {data,error}=await sb.from('workspaces').select('payload').eq('user_id',u.id).maybeSingle();if(error){msg('Supabase datu piekļuve: '+error.message,true);db=empty()}else{db=data?.payload||empty()}render();await loadBilling()}
 $('authform').onsubmit=async e=>{e.preventDefault();$('authmsg').textContent='Pārbauda...';const {data,error}=await sb.auth.signInWithPassword({email:$('email').value,password:$('password').value});$('authmsg').textContent=error?.message||'Pieslēgšanās veiksmīga';if(data?.user)await start(data.user)};
-$('signup').onclick=async()=>{const {error}=await sb.auth.signUp({email:$('email').value,password:$('password').value});$('authmsg').textContent=error?.message||'Pārbaudi e-pastu, lai apstiprinātu reģistrāciju.'};
+$('signup').onclick=async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||!password)return authNotice('Ievadi e-pastu un paroli.',true);authNotice('Reģistrē kontu...');const {data,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:authReturnUrl}});if(error)return authNotice(error.message,true);authNotice(data.session?'Konts izveidots.':'Pārbaudi e-pastu. Atver jaunāko AccountantOS apstiprinājuma saiti.');$('resendConfirm').classList.remove('hidden')};
+$('resendConfirm').onclick=async()=>{const email=$('email').value.trim();if(!email)return authNotice('Ievadi e-pastu.',true);$('resendConfirm').disabled=true;const {error}=await sb.auth.resend({type:'signup',email,options:{emailRedirectTo:authReturnUrl}});$('resendConfirm').disabled=false;authNotice(error?.message||'Ja kontam nepieciešams apstiprinājums, nosūtīta jauna saite.',!!error)};
 $('logout').onclick=async()=>{await sb.auth.signOut();await start(null)};
 $('addCompany').onclick=async()=>{const name=$('companyName').value.trim();if(!name)return;db.companies.push({id:crypto.randomUUID(),name});db.current=db.companies.at(-1).id;try{await save();$('companyName').value='';render();msg('Uzņēmums saglabāts')}catch(e){msg(e.message,true)}};
 $('company').onchange=e=>{db.current=e.target.value;render();save().catch(e=>msg(e.message,true))};
@@ -60,5 +63,10 @@ document.querySelectorAll('[data-plan]').forEach(button=>button.onclick=async()=
 });
 $('manageBilling').onclick=async()=>{try{let x=await billingRequest('portal',{method:'POST',body:'{}'});if(x.url&&new URL(x.url).protocol==='https:')window.location.assign(x.url);else throw Error('Invalid portal URL')}catch(e){$('billingMessage').textContent=e.message}};
 if(new URLSearchParams(location.search).has('checkout'))$('billingMessage').textContent='Atgriezies no Stripe. Abonementa statuss atjauninās pēc apstiprināta webhook.';
-const {data:{user:initial}}=await sb.auth.getUser();await start(initial);sb.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT')start(null)});
+const authHash=new URLSearchParams(location.hash.slice(1));const authQuery=new URLSearchParams(location.search);
+const failure=authHash.get('error_description')||authQuery.get('error_description');
+if(failure){authNotice('E-pasta saites kļūda: '+failure.replace(/\\+/g,' ')+'. Pieprasi jaunu apstiprinājuma saiti.',true);$('resendConfirm').classList.remove('hidden')}
+const {data:{user:initial}}=await sb.auth.getUser();await start(initial);
+if(initial&&location.hash){history.replaceState(null,'',location.pathname+location.search)}
+sb.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT')start(null);else if(event==='SIGNED_IN'&&session?.user){start(session.user).catch(e=>authNotice(e.message,true))}});
 </script></body></html>
