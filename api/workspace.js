@@ -1,4 +1,4 @@
-import {authorized,admin,account,handleError} from './_lib.js';
+import {authorized,admin,account,handleError,stripe,tierFromPrice} from './_lib.js';
 const limits={starter:3,professional:15,agency:50};
 const empty=()=>({companies:[],current:'',transactions:[],invoices:[]});
 function validate(payload){
@@ -22,8 +22,17 @@ export default async function handler(req,res){
   const [billingResult,workspaceResult]=await Promise.all([account(u.id),db.from('workspaces').select('payload,updated_at').eq('user_id',u.id).maybeSingle()]);
   if(workspaceResult.error)throw workspaceResult.error;
   const current=workspaceResult.data?.payload||empty();
-  const tier=active(billingResult)?billingResult.plan:null;
-  const companyLimit=tier?limits[tier]||0:1; // Free evaluation: 1 company; no real financial data permitted
+  let tier=active(billingResult)?billingResult.plan:null;
+  // For writes, Stripe is the authority. A delayed/missed webhook must not preserve paid entitlements.
+  if(req.method==='PUT' && billingResult?.stripe_subscription_id){
+    const sub=await stripe().subscriptions.retrieve(billingResult.stripe_subscription_id);
+    const customerId=typeof sub.customer==='string'?sub.customer:sub.customer?.id;
+    if(customerId!==billingResult.stripe_customer_id)
+      return res.status(403).json({error:'Subscription customer mismatch'});
+    const price=sub.items?.data?.[0]?.price?.id;
+    tier=['active','trialing'].includes(sub.status)?tierFromPrice(price):null;
+  }
+  const companyLimit=tier?limits[tier]||0:1; // Free evaluation: 1 company
   if(req.method==='GET')return res.status(200).json({payload:current,updatedAt:workspaceResult.data?.updated_at||null,tier:tier||'evaluation',companyLimit});
   if(companyLimit===0)return res.status(403).json({error:'Subscription plan not recognized'});
   const next=validate(req.body?.payload);
