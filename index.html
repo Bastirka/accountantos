@@ -78,6 +78,7 @@ $('import').onclick=async()=>{if(!db.current)return msg('Vispirms pievieno uzņ�
  let duplicates=0;const mapped=[];
  for(const record of records){const amount=Number(String(record[numeric]||'').replace(/\s/g,'').replace(',','.'));if(!Number.isFinite(amount)||!String(record[numeric]||'').trim())throw Error('Nederīga summa: '+record[numeric]);
  if(!record.date||!/^\d{4}-\d{2}-\d{2}$/.test(record.date))throw Error('Datuma formātam jābūt YYYY-MM-DD');
+ const [yy,mm,dd]=record.date.split('-').map(Number),parsed=new Date(Date.UTC(yy,mm-1,dd));if(parsed.getUTCFullYear()!==yy||parsed.getUTCMonth()!==mm-1||parsed.getUTCDate()!==dd)throw Error('Nederīgs kalendāra datums: '+record.date);
  const record2={...record,[numeric]:Math.round((amount+Number.EPSILON)*100)/100};const id=signature(record2);if(existing.has(id)){duplicates++;continue}existing.add(id);mapped.push({...record2,company:db.current,id:crypto.randomUUID()})}
  if(!mapped.length)return msg('Jaunu ierakstu nav. Izlaisti '+duplicates+' dublikāti.');
  const previous=structuredClone(db);db[typ].push(...mapped);
@@ -85,11 +86,12 @@ $('import').onclick=async()=>{if(!db.current)return msg('Vispirms pievieno uzņ�
  render();msg('Importēti '+mapped.length+' ieraksti; izlaisti '+duplicates+' dublikāti.')
 }catch(error){msg(error.message,true)}}
 $('sample').onclick=async()=>{if(!db.current)return msg('Vispirms pievieno uzņēmumu',true);const previous=structuredClone(db);db.invoices.push({id:crypto.randomUUID(),company:db.current,number:'INV-100',partner:'Demo SIA',total:121,date:'2026-11-18'});db.transactions.push({id:crypto.randomUUID(),company:db.current,date:'2026-11-18',description:'Demo SIA',amount:121,reference:'Apmaksa INV-100'});try{await save();render();msg('Demo dati saglabāti')}catch(e){db=previous;render();msg(e.message,true)}};
-$('export').onclick=()=>{let ts=db.transactions.filter(t=>t.company===db.current);let lines=['date,description,amount,reference,matched_invoice',...ts.map(t=>[t.date,t.description,t.amount,t.reference,match(t)?.number||''].map(x=>{let v=String(x??'');if(/^[=+@\-\t\r]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"';}).join(','))];let blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='accountantos-report.csv';a.click();URL.revokeObjectURL(a.href)};
+$('export').onclick=()=>{let ts=db.transactions.filter(t=>t.company===db.current);let lines=['date,description,amount,reference,matched_invoice',...ts.map(t=>[t.date,t.description,t.amount,t.reference,match(t)?.number||''].map(x=>{let v=String(x??'');if(/^[\s\u0000-\u001f]*[=+@\-]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"';}).join(','))];let blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='accountantos-report.csv';a.click();URL.revokeObjectURL(a.href)};
 
 async function billingRequest(endpoint,options={}){
  const {data:{session}}=await sb.auth.getSession();
  if(!session?.access_token)throw new Error('Lūdzu pieslēdzies vēlreiz');
+ if(!user||session.user?.id!==user.id)throw new Error('Konts ir mainījies. Pārlādē lapu, lai novērstu datu sajaukšanos.');
  const response=await fetch('/api/'+endpoint,{...options,headers:{'Authorization':'Bearer '+session.access_token,'Content-Type':'application/json',...(options.headers||{})}});
  const payload=await response.json().catch(()=>({}));
  if(!response.ok)throw new Error(payload.error||'Billing request failed ('+response.status+')');
