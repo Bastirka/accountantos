@@ -7,6 +7,9 @@ const source=fs.readFileSync(new URL('../api/workspace.js',import.meta.url),'utf
  .replace(/^import .*;\s*$/gm,'')
  .replace('export default async function handler','async function handler');
 const datasets=new Map();
+let billingState={status:'active',plan:'professional'};
+let stripeStatus='active';
+let stripeCustomer='cus_test';
 const getRecord=(userId)=>datasets.get(userId)||null;
 const supabase=()=>({from:()=>({
  select:()=>({eq:(_k,userId)=>({maybeSingle:async()=>({data:getRecord(userId),error:null})})}),
@@ -17,7 +20,9 @@ const ctx=vm.createContext({
  Buffer,Date,Promise,Set,JSON,Number,Object,Error,
  authorized:async req=>{const id=req.headers?.authorization?.match(/^Bearer (.+)$/)?.[1];if(!id)throw Object.assign(new Error('Sign in required'),{httpStatus:401});return{id}},
  admin:supabase,
- account:async id=>({status:'active',plan:'professional'}),
+ account:async id=>billingState,
+ stripe:()=>({subscriptions:{retrieve:async()=>({status:stripeStatus,customer:stripeCustomer,items:{data:[{price:{id:'price_professional'}}]}})}}),
+ tierFromPrice:price=>price==='price_professional'?'professional':null,
  handleError:(res,e)=>res.status(e.httpStatus||500).json({error:e.message})
 });
 vm.runInContext(source+'; globalThis.endpoint=handler',ctx);
@@ -41,4 +46,23 @@ test('Server does not trust user-supplied ownership in payload',async()=>{
 test('Outdated revision cannot overwrite newer records',async()=>{
  const stale='2020-01-01T00:00:00.000Z';
  assert.equal((await request('alice','PUT',{payload:payload(1),updatedAt:stale})).code,409);
+});
+
+test('Canceled Stripe subscription overrides stale Professional billing status',async()=>{
+ billingState={status:'active',plan:'professional',stripe_customer_id:'cus_test',stripe_subscription_id:'sub_test'};
+ stripeStatus='canceled';stripeCustomer='cus_test';
+ const result=await request('charlie','PUT',{payload:payload(2),updatedAt:null});
+ assert.equal(result.code,403);
+});
+test('Stripe active subscription permits paid company writes',async()=>{
+ stripeStatus='active';
+ const result=await request('charlie','PUT',{payload:payload(2),updatedAt:null});
+ assert.equal(result.code,200);
+});
+test('Stripe customer mismatch rejects workspace writes',async()=>{
+ stripeCustomer='cus_other';
+ const row=datasets.get('charlie');
+ const result=await request('charlie','PUT',{payload:payload(2),updatedAt:row.updated_at});
+ assert.equal(result.code,403);
+ billingState={status:'active',plan:'professional'};
 });
