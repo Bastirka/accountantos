@@ -9,7 +9,7 @@ This is a code/configuration audit, NOT a penetration test or certification.
 - Professional workspace max company count is enforced in `api/workspace.js` (15); attempts exceeding it return HTTP 403.
 - Concurrency conflict prevention compares `updated_at` on writes and responds HTTP 409.
 - Stripe Sandbox contains one active Professional subscription and configured endpoint/portal (no Live account confirmed).
-- Vercel SSO deployment protection is `all_except_custom_domains`, while the app uses a `.vercel.app` domain. Public reachability requires intentional review.
+- Vercel SSO deployment protection was changed from `all_except_custom_domains` to `preview` to permit customer access on the production domain. Verified the public homepage returned HTTP 200; unauthenticated API responses and browser session isolation still need independent HTTP testing.
 - Vercel production environment contains Supabase and Stripe server secrets. Values were not decrypted.
 - Security regression tests were added at `tests/security.test.js` and CI workflow at `.github/workflows/security.yml`. CI success **not confirmed at audit time**.
 
@@ -17,6 +17,8 @@ This is a code/configuration audit, NOT a penetration test or certification.
 - Fixed invoice-number substring matching: `INV-10` no longer matches `INV-100`; ambiguous invoice candidates are not picked arbitrarily.
 - Added baseline Vercel security headers (X-Frame-Options, nosniff, Referrer-Policy, HSTS, Permissions-Policy).
 - Added read-only permission and RLS inspection SQL at `sql/audit_permissions.sql`.
+- Added Stripe-provider subscription verification before Checkout to prevent duplicate subscriptions if Supabase billing status is stale. Locally exercised current GitHub checkout handler with mocked Stripe subscription states (active, trialing, past_due, canceled); all four expected responses passed.
+- Added `tests/checkout.test.js`. Test file syntax checked, but GitHub Actions execution has not been independently confirmed.
 
 ## Unresolved blockers (required before real financial data)
 ### Critical: live database isolation not independently verified
