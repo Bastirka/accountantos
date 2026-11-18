@@ -3,12 +3,12 @@ const plans={starter:'STRIPE_PRICE_STARTER',professional:'STRIPE_PRICE_PROFESSIO
 export default async function handler(req,res){
  if(req.method!=='POST')return res.status(405).json({error:'Method not allowed'});
  try{
-  if(!ready())return res.status(503).json({error:'Stripe test mode is not configured yet'});
+  if(!ready())return res.status(503).json({error:'Billing is not configured yet'});
   const user=await authorized(req);
   const plan=String(req.body?.plan||'');
   if(!Object.hasOwn(plans,plan))return res.status(400).json({error:'Invalid plan'});
   const existing=await account(user.id);
-  if(existing?.status==='active'||existing?.status==='trialing')return res.status(409).json({error:'Subscription already active. Use Billing Portal to manage it.'});
+  if(['active','trialing','past_due','unpaid','incomplete'].includes(existing?.status))return res.status(409).json({error:'Subscription already active. Use Billing Portal to manage it.'});
   const s=stripe();
   let customerId=existing?.stripe_customer_id;
   if(!customerId){const customer=await s.customers.create({email:user.email,metadata:{user_id:user.id}});customerId=customer.id;await persist(user.id,{stripe_customer_id:customerId})}
