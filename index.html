@@ -77,10 +77,13 @@ async function loadBilling(){
  document.querySelectorAll('[data-plan]').forEach(b=>b.disabled=!bill.configured||['active','trialing'].includes(bill.status))
  }catch(e){$('billingState').textContent='Neizdevās ielādēt abonementu: '+e.message;window.billingReady=false;document.querySelectorAll('[data-plan]').forEach(b=>b.disabled=true)}
 }
+let checkoutPending=false;
 document.querySelectorAll('[data-plan]').forEach(button=>button.onclick=async()=>{
+ if(checkoutPending)return;checkoutPending=true;
+ const buttons=[...document.querySelectorAll('[data-plan]')];buttons.forEach(b=>b.disabled=true);
  $('billingMessage').textContent='Atver Stripe Checkout...';
  try{const x=await billingRequest('checkout',{method:'POST',body:JSON.stringify({plan:button.dataset.plan})});if(x.url&&new URL(x.url).origin==='https://checkout.stripe.com')window.location.assign(x.url);else throw Error('Invalid checkout URL')}
- catch(e){$('billingMessage').textContent=e.message}
+ catch(e){$('billingMessage').textContent=e.message;checkoutPending=false;await loadBilling()}
 });
 $('manageBilling').onclick=async()=>{try{let x=await billingRequest('portal',{method:'POST',body:'{}'});if(x.url&&new URL(x.url).protocol==='https:')window.location.assign(x.url);else throw Error('Invalid portal URL')}catch(e){$('billingMessage').textContent=e.message}};
 if(new URLSearchParams(location.search).has('checkout'))$('billingMessage').textContent='Atgriezies no Stripe. Abonementa statuss atjauninās pēc apstiprināta webhook.';
