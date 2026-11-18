@@ -19,6 +19,7 @@ This is a code/configuration audit, NOT a penetration test or certification.
 - Added read-only permission and RLS inspection SQL at `sql/audit_permissions.sql`.
 - Added Stripe-provider subscription verification before Checkout to prevent duplicate subscriptions if Supabase billing status is stale. Locally exercised current GitHub checkout handler with mocked Stripe subscription states (active, trialing, past_due, canceled); all four expected responses passed.
 - Added `tests/checkout.test.js`. Test file syntax checked, but GitHub Actions execution has not been independently confirmed.
+- Cleared in-memory financial workspace and rendered rows immediately on logout/account change, and discarded stale asynchronous workspace responses. Deployed production and verified Vercel READY.
 
 ## Unresolved blockers (required before real financial data)
 ### Critical: live database isolation not independently verified
