@@ -53,3 +53,11 @@ This is a code/configuration audit, NOT a penetration test or certification.
 6. Live payment identity, legal/VAT, custom-domain/access configuration, then limited rollout.
 
 Status: **NOT APPROVED for storage of real client financial data or collecting Live subscriptions.**
+
+
+## Nov 19, 2026 — follow-up hardening
+- Work-mode security audit supplied by project owner reported 15/15 automated tests passed, two real test users could not see each other's companies, unauthenticated workspace access was rejected, and logout UI residue was fixed (commits `89532a794ca161966871b1751ff20e5f25e29179`, `1ed5be09214ba7d4474166a85714ca851b53d689`). This is a supplied audit report, not a substitute for independently inspecting current database grants.
+- Fixed CSV bank import handling for escaped quote characters, quoted multiline descriptions, BOM, semicolon delimiters, duplicated headers, and mismatched column counts. Added `tests/csv.test.js`. Six parser scenarios passed in direct source-level execution.
+- Made `sql/setup.sql` secure by default for new environments: authenticated users receive owner-scoped read privilege only, and direct INSERT/UPDATE/DELETE to workspaces are revoked. No SQL migrations were automatically executed in the live Supabase project.
+- Current Vercel production deployment was confirmed READY after these code changes.
+- **Outstanding:** Run `sql/audit_permissions.sql` against the live Supabase project and inspect its result. Do not run `sql/setup.sql` against production without backup and migration review. Restore drill, CI test execution confirmation for newly added tests, and Stripe Live checks remain open.
