@@ -1,47 +1,35 @@
 # AccountantOS
 
-A bookkeeping workflow MVP for Latvian accountants.
+A Latvian bookkeeping workflow SaaS MVP with Supabase Auth, per-user workspaces and Stripe Sandbox billing.
+
+> **Security status (2026-11-19):** Test accounts passed an application-level isolation audit, and Stripe Sandbox checkout is operational. **Do not upload real client financial records or accept Stripe Live payments yet.** The live Supabase permission/RLS audit, verified restore procedures and legal/compliance review are still required.
 
 ## Deployment
-This repo contains a static web client backed by Supabase Auth and a per-user JSONB workspace.
+- Frontend: `index.html`; API: `api/*.js`; Vercel project `accountantos`.
+- Database: Supabase Auth and `public.workspaces` / `public.billing_accounts`.
+- `sql/setup.sql` is a **secure-by-default initial schema** for a NEW environment only. Do not re-run setup against production without a reviewed backup and migration plan.
+- `sql/lockdown_workspace.sql` is the existing-project hardening migration. It revokes direct client writes to `workspaces` and billing records. All workspace writes must go through the authenticated server API.
+- `sql/audit_permissions.sql` is **read-only** and can be run in the production Supabase SQL editor. Review the ten permission checks and the policy listing; no finance data is selected.
 
-1. In Supabase SQL Editor, run `sql/setup.sql` (already done for the connected project).
-2. Confirm the `public.workspaces` table has the Data API permissions required by the authenticated role. Keep RLS enabled and ownership policies in place.
-3. In Supabase Authentication > URL Configuration, configure the deployed Vercel URL under Site URL and Redirect URLs.
-4. Deploy the repository as a static Vercel project.
-5. Test creating and reloading a company, then test that different accounts cannot access each other's data.
+## Current features
+- Supabase email login, email verification and per-user workspace.
+- Companies, CSV imports for invoices/transactions, possible invoice matching, data export (CSV and JSON).
+- Server workspace authorization and save conflict protection (409), evaluation limit 1 company / 30 invoices and transactions; paid tiers Starter 3, Professional 15 and Agency 50.
+- Stripe **Sandbox** recurring subscriptions, webhook verification and billing customer portal.
+- Checkout and paid-workspace write authorization verify subscription state at Stripe; stale billing status alone does not grant a paid write.
 
-## Limitations
-Testing MVP only. Matching and VAT summaries require human accountant verification. No bank feed, VID submission or active Stripe billing is configured. Do not upload real customer financial data until auth, RLS, backup and security testing are completed.
+## Tests
+```sh
+npm test
+```
+Runs Node built-in test runner on `tests/*.test.js`. The repository also includes `.github/workflows/security.yml`. Verify green CI for each release; presence of workflow is not proof the tests ran successfully.
 
-Never put Supabase secret keys or Stripe secrets in this repository.
+## Release gate (not yet met)
+1. Run `sql/audit_permissions.sql` against the live Supabase database; investigate any false/null check or unexpected policy.
+2. Verify unauthenticated API rejection, browser account isolation and direct Data API RLS with two nonprivileged test users.
+3. Prove verified backup **and restoration** of test records (user JSON export alone is not database disaster recovery).
+4. Complete financial correctness tests for bank CSV encoding, multirecord matching and VAT workflows.
+5. Verify Stripe Sandbox cancellation, renewal, failure, retry and downgrade handling.
+6. Complete privacy policy, GDPR/DPA, account removal process, seller verification, VAT treatment and Stripe Live setup before commercial launch.
 
-## Stripe test subscriptions (not yet activated)
-Implemented server routes:
-- `POST /api/checkout` — authenticated Stripe Checkout session; allowed plans starter, professional, agency.
-- `POST /api/portal` — authenticated Stripe Billing Portal.
-- `GET /api/billing` — user-scoped billing status.
-- `POST /api/webhook` — signature-verified subscription updates to `billing_accounts`.
-
-Set **encrypted** Vercel environment variables, never commit them:
-- `SUPABASE_SECRET_KEY`: freshly rotated Supabase secret key (server-only)
-- `STRIPE_SECRET_KEY`: Stripe **test mode** secret key, starts `sk_test_`
-- `STRIPE_WEBHOOK_SECRET`: webhook signing secret from Stripe, starts `whsec_`
-- `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PROFESSIONAL`, `STRIPE_PRICE_AGENCY`: monthly recurring EUR price IDs from Stripe **test mode**
-- `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `APP_URL`: configured in Vercel
-
-Configure Stripe Dashboard > Developers > Webhooks: URL `https://accountantos-chi.vercel.app/api/webhook` with events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`. Configure Customer Portal in Stripe Dashboard.
-
-After setting variables, **redeploy** production to include the new environment values. Test Stripe checkout with Stripe test payment methods and inspect webhook delivery plus billing_accounts.
-
-**Limitations:** Plan-based usage limits and paid access are NOT enforced yet; prices shown in UI are illustrative until test prices are configured. The workspaces table holds user documents; review GDPR, storage design, backup, security, and billing behavior before accepting real customers. Do not paste `sk_test_`, `sk_live_`, `sb_secret_` or `whsec_` values into chat.
-
-
-## Commercialization hardening (Nov 18, 2026)
-- Authenticated `/api/workspace` GET/PUT validates workspace and checks Stripe subscription tier server-side (evaluation: 1 company, paid: 3/15/50 companies; evaluation limited to 30 invoices and transactions).
-- Frontend data reads and writes now go through this API. Do not claim this is secure until the SQL privilege migration below has been executed.
-- **Mandatory once**: run `sql/lockdown_workspace.sql` via Supabase SQL Editor to revoke direct browser INSERT/UPDATE/DELETE to `workspaces`. Otherwise paid access can be bypassed with a direct Supabase API call.
-- Webhook handler updated to retry failed events (HTTP 500), handle invoice paid/failed events, and validate customer ownership; add corresponding events to Stripe endpoint in sandbox and live mode.
-- **Not live**: current Stripe account connection is sandbox (`livemode: false`). Production Stripe keys, products, webhooks, portal configuration, applicable VAT settings, and end-to-end payment tests are still missing.
-- **Not yet appropriate for storing real client financial records**: single JSONB workspace, no automatic backups/restore verification, no conflict protection for concurrent edits, incomplete file-format support, lack of formal tenant isolation test and audit trail.
-- Before taking payments: confirm registered seller details, Stripe Live activation, verified payouts, privacy/DPA/terms, backup/restore, security review, cancellation/refund handling, tax registrations, and tests for failed/renewed/disputed payments.
+Never commit or paste Stripe, Supabase, webhook or test-account passwords into source code or issue trackers.
