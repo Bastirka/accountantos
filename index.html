@@ -39,6 +39,10 @@ let sessionGeneration=0;
 async function start(u){
  const generation=++sessionGeneration;
  user=u;db=empty();workspaceRevision=null;window.companyLimit=0;render();
+ if(!u){
+  $('email').value='';$('password').value='';$('companyName').value='';$('csv').value='';
+  $('authmsg').textContent='';$('billingMessage').textContent='';
+ }
  $('workspaceNav').classList.toggle('hidden',!u);
  document.querySelector('header').classList.toggle('signed-out',!u);
  document.querySelector('main').classList.toggle('signed-out',!u);
