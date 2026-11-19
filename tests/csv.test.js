@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const from=html.indexOf('function parseCSV(src)'),to=html.indexOf("$('#import').onclick",from);
-assert.ok(from>=0,'CSV parser not found');
+const from=html.indexOf('function parseCSV(src)'),to=html.indexOf("$('import').onclick",from);
+assert.ok(from>=0&&to>from,'CSV parser not found');
 const ctx=vm.createContext({String,Set,Object,Error});
 vm.runInContext(html.slice(from,to)+';globalThis.parseCSV=parseCSV',ctx);
 const parse=x=>ctx.parseCSV(x);
