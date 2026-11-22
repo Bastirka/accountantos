@@ -48,6 +48,8 @@ const sb=createClient(url,key);const $=id=>document.getElementById(id);
 const authReturnUrl='https://accountantos-chi.vercel.app/';
 function authNotice(text,bad=false){$('authmsg').textContent=text;$('authmsg').className=bad?'error':'muted'}
 const empty=()=>({companies:[],current:'',transactions:[],invoices:[]});let user=null,db=empty();
+const previewMode=new URLSearchParams(location.search).has('preview');
+function previewWorkspace(){const company='demo-company';return{companies:[{id:company,name:'Mūsu Firma SIA'}],current:company,invoices:[{id:'i1',company,number:'R-02676',partner:'SIA OfficeMarket',total:305,date:'2026-11-27'},{id:'i2',company,number:'R-02684',partner:'SIA LMT',total:107.47,date:'2026-11-30'},{id:'i3',company,number:'R-02683',partner:'SIA Tet',total:94.68,date:'2026-11-30'},{id:'i4',company,number:'R-02679',partner:'Circle K Latvia SIA',total:121,date:'2026-11-28'}],transactions:[{id:'t1',company,date:'2026-11-27',description:'Biroja tehnikas rezerves daļas',amount:-305.39,reference:'EV-226981'},{id:'t2',company,date:'2026-11-30',description:'SIA LMT – sakaru pakalpojumi (novembris)',amount:-107.47,reference:'Apmaksa R-02684',reviewStatus:'approved'},{id:'t3',company,date:'2026-11-30',description:'SIA Tet – interneta pakalpojumi',amount:-94.68,reference:'R-02683',reviewStatus:'approved'},{id:'t4',company,date:'2026-11-28',description:'Circle K Latvia SIA – degviela',amount:-121,reference:'R-02679'},{id:'t5',company,date:'2026-11-25',description:'SIA Tilde – programmatūras licence',amount:-741.79,reference:'TILDE-INV-11892'},{id:'t6',company,date:'2026-11-21',description:'SIA Virši – degviela',amount:-100,reference:'VIR-9934521'},{id:'t7',company,date:'2026-11-18',description:'Piegāde: SIA OfficeMarket – biroja preces',amount:-188.9,reference:'R-02676'},{id:'t8',company,date:'2026-11-15',description:'SIA Rimi Latvia – saimniecības preces',amount:-64.75,reference:'RIM-7745610'}]}}
 const fmt=n=>Number(n||0).toLocaleString('lv-LV',{style:'currency',currency:'EUR'});
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function msg(v,bad=false){$('status').textContent=v;$('status').className=bad?'error':'muted'}
@@ -83,6 +85,7 @@ async function start(u){
  $('logout').classList.toggle('hidden',!u);
  $('account').textContent=u?.email||'Droša grāmatvedības darba vide';
  if(!u){msg('');return}
+ if(previewMode){db=previewWorkspace();workspaceRevision=new Date().toISOString();window.companyLimit=15;activeFilter='all';document.querySelectorAll('.review-tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.filter==='all'));render();$('billingState').textContent='Plāns: Professional · Statuss: preview';return}
  try{
   const data=await billingRequest('workspace');
   if(generation!==sessionGeneration)return;
@@ -203,7 +206,7 @@ $('approveToolbar').onclick=()=>{if(selectedTransactionId)setReviewStatus(select
 $('closeInspector').onclick=()=>{selectedTransactionId=null;renderInspector(null)};
 $('addTransaction').onclick=()=>msg('Manuāla darījuma pievienošana būs nākamajā versijā. Pašlaik izmanto CSV importu.');
 $('statusToolbar').onclick=()=>msg('Izvēlies darījumu un maini statusu saskaņošanas panelī.');
-const {data:{user:initial}}=await sb.auth.getUser();await start(initial);
+const initial=previewMode?{id:'preview-user',email:'preview@accountantos.lv'}:(await sb.auth.getUser()).data.user;await start(initial);
 if(initial&&location.hash){history.replaceState(null,'',location.pathname+location.search)}
 sb.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT')start(null);else if(event==='SIGNED_IN'&&session?.user){start(session.user).catch(e=>authNotice(e.message,true))}});
 </script></body></html>
