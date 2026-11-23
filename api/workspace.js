@@ -1,16 +1,17 @@
 import {authorized,admin,account,handleError,stripe,tierFromPrice} from './_lib.js';
 const limits={starter:3,professional:15,agency:50};
-const empty=()=>({companies:[],current:'',transactions:[],invoices:[]});
+const empty=()=>({companies:[],current:'',transactions:[],invoices:[],documents:[]});
 function validate(payload){
  if(!payload||typeof payload!=='object'||Array.isArray(payload))throw Object.assign(new Error('Invalid workspace'),{httpStatus:400});
- for(const k of ['companies','transactions','invoices'])if(!Array.isArray(payload[k]))throw Object.assign(new Error('Invalid '+k),{httpStatus:400});
- if(payload.companies.length>50||payload.transactions.length>20000||payload.invoices.length>20000)throw Object.assign(new Error('Workspace limit exceeded'),{httpStatus:413});
+ for(const k of ['companies','transactions','invoices','documents'])if(!Array.isArray(payload[k]))throw Object.assign(new Error('Invalid '+k),{httpStatus:400});
+ if(payload.companies.length>50||payload.transactions.length>20000||payload.invoices.length>20000||payload.documents.length>5000)throw Object.assign(new Error('Workspace limit exceeded'),{httpStatus:413});
  if(Buffer.byteLength(JSON.stringify(payload),'utf8')>4500000)throw Object.assign(new Error('Workspace too large'),{httpStatus:413});
  if(payload.companies.some(c=>!c||typeof c.id!=='string'||typeof c.name!=='string'||c.name.length>180)||payload.companies.some(c=>c.id.length>100))throw Object.assign(new Error('Invalid company data'),{httpStatus:400});
  const companyIds=new Set(payload.companies.map(c=>c.id));
  if(companyIds.size!==payload.companies.length)throw Object.assign(new Error('Duplicate company identifiers'),{httpStatus:400});
  if(payload.current&& !companyIds.has(payload.current))throw Object.assign(new Error('Invalid active company'),{httpStatus:400});
- if([...payload.transactions,...payload.invoices].some(x=>!x||!companyIds.has(x.company)))throw Object.assign(new Error('Records must belong to an existing company'),{httpStatus:400});
+ if([...payload.transactions,...payload.invoices,...payload.documents].some(x=>!x||!companyIds.has(x.company)))throw Object.assign(new Error('Records must belong to an existing company'),{httpStatus:400});
+ if(payload.documents.some(d=>typeof d.id!=='string'||typeof d.name!=='string'||typeof d.type!=='string'||typeof d.storagePath!=='string'||d.storagePath.length>500||d.name.length>220))throw Object.assign(new Error('Invalid document data'),{httpStatus:400});
  return payload;
 }
 function active(a){return a&&['active','trialing'].includes(a.status)}
