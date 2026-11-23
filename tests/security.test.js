@@ -26,7 +26,7 @@ const ctx=vm.createContext({
  handleError:(res,e)=>res.status(e.httpStatus||500).json({error:e.message})
 });
 vm.runInContext(source+'; globalThis.endpoint=handler',ctx);
-function payload(n){return {companies:Array.from({length:n},(_,i)=>({id:'c'+i,name:'Firm '+i})),current:n?'c0':'',transactions:[],invoices:[]}}
+function payload(n){return {companies:Array.from({length:n},(_,i)=>({id:'c'+i,name:'Firm '+i})),current:n?'c0':'',transactions:[],invoices:[],documents:[]}}
 async function request(id,method='GET',body={}){
  const req={method,headers:id?{authorization:'Bearer '+id}:{},body};
  const res={code:200,setHeader(){},status(n){this.code=n;return this},json(x){this.body=x;return this}};
@@ -65,4 +65,10 @@ test('Stripe customer mismatch rejects workspace writes',async()=>{
  const result=await request('charlie','PUT',{payload:payload(2),updatedAt:row.updated_at});
  assert.equal(result.code,403);
  billingState={status:'active',plan:'professional'};
+});
+
+test('Document metadata must belong to an existing company',async()=>{
+ const base=payload(1);base.documents=[{id:'d1',company:'other-company',name:'receipt.jpg',type:'image/jpeg',storagePath:'user/c/d1.jpg'}];
+ const result=await request('delta','PUT',{payload:base,updatedAt:null});
+ assert.equal(result.code,400);
 });
