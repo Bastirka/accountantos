@@ -9,6 +9,7 @@ A Latvian bookkeeping workflow SaaS MVP with Supabase Auth, per-user workspaces 
 - Database: Supabase Auth and `public.workspaces` / `public.billing_accounts`.
 - `sql/setup.sql` is a **secure-by-default initial schema** for a NEW environment only. Do not re-run setup against production without a reviewed backup and migration plan.
 - `sql/lockdown_workspace.sql` is the existing-project hardening migration. It revokes direct client writes to `workspaces` and billing records. All workspace writes must go through the authenticated server API.
+- `sql/normalize_workspace_v1.sql` non-destructively creates normalized company, transaction, invoice and document tables, copies legacy JSON data, verifies counts, and leaves `workspaces` untouched for rollback. Apply it only after a verified database backup.
 - `sql/audit_permissions.sql` is **read-only** and can be run in the production Supabase SQL editor. Review the ten permission checks and the policy listing; no finance data is selected.
 
 ## Current features
