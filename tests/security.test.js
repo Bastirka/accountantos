@@ -72,3 +72,21 @@ test('Document metadata must belong to an existing company',async()=>{
  const result=await request('delta','PUT',{payload:base,updatedAt:null});
  assert.equal(result.code,400);
 });
+
+test('Workspace hard limits reject excessive records',async()=>{
+ const base=payload(1);
+ base.transactions=Array.from({length:20001},(_,i)=>({id:'t'+i,company:'c0',date:'2026-11-24',description:'x',amount:1,reference:''}));
+ assert.equal((await request('limit-user','PUT',{payload:base,updatedAt:null})).code,413);
+});
+test('Workspace rejects duplicate company identifiers',async()=>{
+ const base=payload(2);base.companies[1].id='c0';
+ assert.equal((await request('duplicate-user','PUT',{payload:base,updatedAt:null})).code,400);
+});
+test('Workspace rejects malformed transaction values',async()=>{
+ const base=payload(1);base.transactions=[{id:'t1',company:'c0',date:'2026-11-24',description:'Bad amount',amount:'not-a-number',reference:''}];
+ assert.equal((await request('bad-transaction','PUT',{payload:base,updatedAt:null})).code,400);
+});
+test('Workspace rejects malformed invoice values',async()=>{
+ const base=payload(1);base.invoices=[{id:'i1',company:'c0',number:'INV-1',partner:'Test',total:null,date:'2026-11-24'}];
+ assert.equal((await request('bad-invoice','PUT',{payload:base,updatedAt:null})).code,400);
+});

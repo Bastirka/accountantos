@@ -29,6 +29,10 @@ export default async function handler(req,res){
    if(!ALLOWED.has(type))bad('Atbalstīti tikai JPG, PNG un PDF faili.');
    if(!Number.isInteger(size)||size<1||size>MAX_BYTES)bad('Fails pārsniedz 10 MB limitu.');
    if(typeof company!=='string'||!company||company.length>100)bad('Invalid company');
+   const {data:workspace,error:workspaceError}=await db.from('workspaces').select('payload').eq('user_id',user.id).maybeSingle();
+   if(workspaceError)throw workspaceError;
+   if(!workspace?.payload?.companies?.some(item=>item?.id===company))bad('Company not found',404);
+   if((workspace.payload.documents?.length||0)>=5000)bad('Document limit reached',413);
    const id=crypto.randomUUID(),path=user.id+'/'+company+'/'+id+'-'+safeName(name);
    const {data,error}=await db.storage.from(BUCKET).createSignedUploadUrl(path);
    if(error)throw error;

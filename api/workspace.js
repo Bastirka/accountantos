@@ -11,7 +11,10 @@ function validate(payload){
  if(companyIds.size!==payload.companies.length)throw Object.assign(new Error('Duplicate company identifiers'),{httpStatus:400});
  if(payload.current&& !companyIds.has(payload.current))throw Object.assign(new Error('Invalid active company'),{httpStatus:400});
  if([...payload.transactions,...payload.invoices,...payload.documents].some(x=>!x||!companyIds.has(x.company)))throw Object.assign(new Error('Records must belong to an existing company'),{httpStatus:400});
- if(payload.documents.some(d=>typeof d.id!=='string'||typeof d.name!=='string'||typeof d.type!=='string'||typeof d.storagePath!=='string'||d.storagePath.length>500||d.name.length>220))throw Object.assign(new Error('Invalid document data'),{httpStatus:400});
+ const validText=(value,max,optional=false)=>optional&&value==null||typeof value==='string'&&value.length<=max;
+ if(payload.transactions.some(t=>!validText(t.id,100)||!validText(t.date,20)||!validText(t.description,500)||!Number.isFinite(t.amount)||!validText(t.reference,220,true)||!validText(t.reviewStatus,30,true)))throw Object.assign(new Error('Invalid transaction data'),{httpStatus:400});
+ if(payload.invoices.some(i=>!validText(i.id,100)||!validText(i.number,120)||!validText(i.partner,220)||!Number.isFinite(i.total)||!validText(i.date,20)))throw Object.assign(new Error('Invalid invoice data'),{httpStatus:400});
+ if(payload.documents.some(d=>typeof d.id!=='string'||d.id.length>100||typeof d.name!=='string'||typeof d.type!=='string'||typeof d.storagePath!=='string'||d.storagePath.length>500||d.name.length>220||!['image/jpeg','image/png','application/pdf'].includes(d.type)||!Number.isInteger(d.size)||d.size<1||d.size>10*1024*1024))throw Object.assign(new Error('Invalid document data'),{httpStatus:400});
  return payload;
 }
 function active(a){return a&&['active','trialing'].includes(a.status)}
